@@ -1,8 +1,14 @@
 Package: methylation
-Title: 
-Description: 
+Title: Package to analyze methylation data from Illumina 450K arrays
+Description: This package is intended to create output from Illumina 450k methylation arrays. 
 Version: 0.1
-Authors@R: # getOptions('devtools.desc.author')
-Depends: R (>= 3.0.2)
-License: # getOptions('devtools.desc.license')
+Author: James W. MacDonald
+Maintainer: James W. MacDonald <jmacdon@u.washington.edu>
+Depends:
+    R (>= 3.0.2)
+License: Artistic-2.0
 LazyData: true
+Imports: biomaRt, ReportingTools, GenomicFeatures,GenomicRanges,GenomeGraphs,IRanges
+Collate:
+    'methylation-package.r'
+    'methylation.R'
