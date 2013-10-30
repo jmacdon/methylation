@@ -3,7 +3,7 @@
 \title{Correlate methylation and gene expression data.}
 \usage{
   geneByMeth(tab, genes, eset, samps, gene.data, chip.db,
-    contname, dontuse = "AGA")
+    contname, dontuse = "", orgpkg)
 }
 \arguments{
   \item{tab}{A data.frame containing the chromosome, start,
@@ -38,6 +38,9 @@
 
   \item{dontuse}{Which Categories from the samps data.frame
   should we NOT use? If only two Category levels, use "".}
+
+  \item{orgpkg}{An organism level annotation package (e.g.,
+  org.Hs.eg.db)}
 }
 \value{
   This function returns a list of HTMLReportRef items that

@@ -2,7 +2,8 @@
 \alias{plotAndOut}
 \title{Create tables and plots showing correlation between methylation and gene expression data.}
 \usage{
-  plotAndOut(lstitm, eset, prb, samps, file, contname)
+  plotAndOut(lstitm, eset, prb, samps, file, contname,
+    orgpkg)
 }
 \arguments{
   \item{lstitm}{A data.frame containing gene expression
@@ -26,6 +27,9 @@
   \item{contname}{A contrast name. Usually this is
   lowercase and separated by underscores (e.g.,
   this_vs_that)}
+
+  \item{orgpkg}{An organism level annotation package (e.g.,
+  org.Hs.eg.db)}
 }
 \value{
   This returns an HTMLReportRef.
