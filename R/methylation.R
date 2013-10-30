@@ -1,125 +1,52 @@
-
 ##' Create a plot for a region showing differential methylation.
 ##'
 ##' This function is used to plot a genomic region where there is differential methylation
 ##' that includes the methylation data, a smoothed line, and any genes in the region. This
 ##' function is in general not called by the end user. Instead use \code{methByRegion}.
 ##' @title Create methylation region plot
-##' @param bumpsObj The table data.frame from the output of bumphunter (e.g., bumphunter()$table)
+##' @param bumpsObj The output from bumphunter
 ##' @param eset Usually a \code{GenomicRatioSet} created by the minfi package
-##' @param fitobj An MArrayLM object, after fitting the same model as bumphunter. This is the source of the methylation data in the plot
 ##' @param row Which row of the bumpsObj are we plotting?
-##' @param fitcol Which column of the fitobj corresponds to the coefficient tested by bumphunter?
-##' @param mart A connection to the correct biomaRt database. 
-##' @return This returns a plot of the region in question.
+##' @param txdb A transcript database object (e.g., TxDb.Hsapiens.UCSC.hg19.knownGene)
+##' @param samps A data.frame containing sample information. This data.frame must contain two columns; one called Gender, listing the gender of
+##' each sex, and one called Category, listing the category for each sample
+##' @param dontuse A character vector of Category levels that won't be plotted. If using all levels, this argument is "".
+##' @param sexfirst Which sex should be plotted first? In general this is the sex for which the bump being shown was significant.
+##' @param fitobj An MArrayLM object, after fitting the same model as bumphunter. This is the source of the methylation data in the plot
+##' @return This function doesn't return anything. It is only called for the side effect of creating a plot.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 ##' @export
-makeMethPlot <- function(bumpsObj, eset, fitobj, row, fitcol, mart){
-    reg <- getRegion(bumpsObj=bumpsObj, eset=eset,  row=row)
-    span <- ifelse(length(reg$prbs) < 15, 0.75, 0.65)
-    sm <- makeSmoothing(start(reg$prbs), loess(fitobj$coef[names(reg$prbs),fitcol]~start(reg$prbs), span = span)$fitted,
-                        dp = DisplayPars(color = "black", lwd = 1, lty = "solid"))
-    expres <- makeGenericArray(fitobj$coef[names(reg$prbs), fitcol, drop = FALSE], start(reg$prbs), trackOverlay = sm,
-                              dp = DisplayPars(color = "red", type = "point", pointSize = 0.5))
-    gaxis <- makeGenomeAxis(TRUE, TRUE)
-    overlay <- getGenes(reg$genesplus, reg$genesminus, mart, bumpsObj[row,2])
-    title <- makeTitle(paste("Chromosome", sub("chr","", bumpsObj[row,1])))
-    print(gdPlot(list(title, expres, reg$genesplus, gaxis, reg$genesminus), minBase = reg$minbase, maxBase = reg$maxbase,
-           overlay = overlay))
-}
-##' Get gene symbols given an Ensembl ID
-##'
-##' This function is used by the \code{makeMethPlot} function in order to annotate genes.
-##' This is an internal function and is not intended to be called by the end user.
-##' @title Get gene symbols
-##' @param plus Ensembl IDs on the plus strand
-##' @param minus Ensembl IDs on the minus strand
-##' @param mart A connection to the correct biomaRt database.
-##' @param peakloc The location of the peak itself
-##' @return This creates a TextOverlay object for inclusion to the methylation region plot
-##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-getGenes <- function(plus, minus, mart, peakloc){
-    thecount <- 0
-    if(nrow(plus@ens) > 0){
-        topgns <- getBM(c("ensembl_gene_id","hgnc_symbol"), "ensembl_gene_id", unique(plus@ens[,1]), mart)
-        topgns[is.na(topgns[,2]),2] <- "?"
-        #topgns <- topgns[!is.na(topgns$hgnc_symbol),, drop = FALSE]
-        if(nrow(topgns) > 0){
-            locs <- sapply(tapply(1:nrow(plus@ens), plus@ens[,1], function(x) plus@ens[x,4]), function(y) y[which.min(abs(y - peakloc))])
-            topgns$loc <- locs[match(topgns$ensembl_gene_id, names(locs))]
-            topgns$y <- rep(0.22, nrow(topgns))
-            thecount <- 1
-        }
-    }
-    if(nrow(minus@ens) > 0){
-        bottomgns <- getBM(c("ensembl_gene_id","hgnc_symbol"), "ensembl_gene_id", unique(minus@ens[,1]), mart)
-        bottomgns[is.na(bottomgns$hgnc_symbol),2] <- "unknown"
-        #bottomgns <- bottomgns[!is.na(bottomgns$hgnc_symbol),, drop = FALSE]
-        if(nrow(bottomgns) > 0) {
-            locs <- sapply(tapply(1:nrow(minus@ens), minus@ens[,1], function(x) minus@ens[x,4]), function(y) y[which.min(abs(y - peakloc))])
-            bottomgns$loc <- locs[match(bottomgns$ensembl_gene_id, names(locs))]
-            bottomgns$y <- rep(0.12, nrow(bottomgns))
-            thecount <- thecount + 2
-        }
-    }
-    if(thecount == 0) return(NULL)
-    touse <- switch(thecount,
-                    topgns,
-                    bottomgns,
-                    rbind(topgns, bottomgns))
-    out <- makeTextOverlay(touse$hgnc_symbol, touse$loc, touse$y)
-    out
-}
-    
-##' Get methylation region
-##'
-##' This is an internal function and not intended to be called directly. The goal is to get a reasonably sized
-##' genomic region around an area that is differentially methylated, so the resulting plot looks good
-##' @title Get Methylation Region
-##' @param bumpsObj The 'table' list item from the bumps object returned by \code{bumphunter}
-##' @param eset Usually a GenomicRatioSet, generated by minfi
-##' @param row Which row of the table are we using?
-##' @return A list with the max and min of the genomic region, as well as the Ensembl ID of any genes therein.
-##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-getRegion <- function(bumpsObj, eset, row){
-    therow <- bumpsObj[row,, drop = FALSE]
-    minobs <- therow$start
-    maxobs <- therow$end
-    therange <- max(abs(maxobs - minobs), 100)
-    minbase <- minobs - 20*therange
-    maxbase <- maxobs + 20*therange
-    genesplus <- makeGeneRegion(minbase, maxbase, sub("chr", "", therow$chr), "+", mart)
-    genesminus <- makeGeneRegion(minbase, maxbase, sub("chr", "", therow$chr), "-", mart)
-    prbs <- rowData(eset)[rowData(eset) %over% GRanges(therow$chr, IRanges(start = minbase, end = maxbase)),]
-    prbsobs <- rowData(eset)[rowData(eset) %over% GRanges(therow$chr, IRanges(start = minobs, end = maxobs)),]
-    while(length(prbs) < 10){
-        minbase <- minbase - 40*therange
-        maxbase <- maxbase + 40*therange
-        genesplus <- makeGeneRegion(minbase, maxbase, sub("chr", "", therow$chr), "+", mart)
-        genesminus <- makeGeneRegion(minbase, maxbase, sub("chr", "", therow$chr), "-", mart)
-        prbs <- rowData(eset)[rowData(eset) %over% GRanges(therow$chr, IRanges(start = minbase, end = maxbase)),]
-    }
-    return(list(minbase=minbase, maxbase=maxbase, genesplus=genesplus, genesminus=genesminus, prbs=prbs,
-                minobs = minobs, maxobs = maxobs, prbsobs = prbsobs))
-}
-
-
-
-
-##' Get mean methylation for a given region
-##'
-##' This is an internal function and not intended for direct use. The general idea is to get the mean expression of
-##' methylation probes in a region considered to be significantly differentially methylated, in order to create a dotplot.
-##' @title Get Mean Methylation
-##' @param bmptab The 'table' list item from the bumps object returned by \code{bumphunter}
-##' @param eset Usually a GenomicRatioSet, generated by minfi
-##' @return A data.frame containing mean methylation data.
-##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-getMeans <- function(bmptab, eset){
-    gr <- GRanges(bmptab$chr, IRanges(start = bmptab$start, end = bmptab$end))
-    dat <- sapply(1:nrow(bmptab), function(x) colMeans(getM(eset[rowData(eset) %over% gr[x,],])))
-    colnames(dat) <- apply(bmptab, 1, function(x) paste(gsub("\\s+", "", x, perl=TRUE), collapse = "_"))
-    dat
+makeMethPlot <- function(bumpsObj, eset, row, txdb, samps, dontuse = "", sexfirst = "Male"){
+    genome <- genome(eset)[1]
+    chr <- bumpsObj$table[row,1]
+    start <- bumpsObj$table[row,2]
+    end <- bumpsObj$table[row,3]
+    reg <- GRanges(chr, IRanges(start, end))
+    reg <- resize(reg, width(reg) * 10, "center")
+    iTrack <- IdeogramTrack(genome = genome, chromosome = chr)
+    gTrack <- GenomeAxisTrack()
+    grTrack <- GeneRegionTrack(txdb, genome = genome, chromosome = chr, start = start(reg), end = end(reg),
+                               showId = TRUE, name = "Transcripts")
+    dtm <- dtf <- rowData(eset)[rowData(eset) %over% reg,]
+    elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse]
+    elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse]
+    if(sexfirst == "Male"){
+        dTrackM <- DataTrack(dtm, name = "Male methylation", 
+                             groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
+                             type = c("a","p"))
+        dTrackF <- DataTrack(dtf, name = "Female methylation", 
+                             groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
+                             type = c("a","p"), legend = TRUE)
+        plotTracks(list(iTrack, gTrack, grTrack, dTrackM, dTrackF), from = start(reg), to = end(reg))
+    } else {
+         dTrackM <- DataTrack(dtm, name = "Male methylation", 
+                             groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
+                             type = c("a","p"), legend = TRUE)
+        dTrackF <- DataTrack(dtf, name = "Female methylation", 
+                             groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
+                             type = c("a","p"))
+        plotTracks(list(iTrack, gTrack, grTrack, dTrackF, dTrackM), from = start(reg), to = end(reg), background.title = "darkblue")
+     }
 }
 
 ##' Generate sex-stratified dotplot of methylation for a given region.
@@ -158,12 +85,10 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA"){
 ##' @title Create plots showing differential methylation and correlation to expression data.
 ##' @param bmpsObj The output from \code{bumphunter}
 ##' @param eset Usually a GenomicRatioSet, created by a call to \code{preprocessQuantile} from the minfi package
-##' @param fit An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
-##' @param mart A connection to the Biomart server, created using the \code{useMart} function from biomaRt package
 ##' @param samps A data.frame that maps samples to phenotype. This data.frame MUST contain columns named Category and Gender!
 ##' @param contname A contrast name, used to name the directory where these data will be stored. Usually of the form 'this_vs_that'.
 ##' @param longname A long form of the contrast name, usually of the form 'This versus that'
-##' @param genes A GRanges object that lists known genes. Usually generated by e.g. genes(TxDb.Hsapiens.UCSC.hg19.knownGene)
+##' @param txdb A transcript database (e.g., TxDb.Hsapiens.UCSC.hg19.knownGene)
 ##' @param gene.data Default is NULL. Otherwise, a data.frame or matrix containing gene expression data. The columns of this
 ##' data.frame must correspond exactly to columns of the methylation data. Row names must be array IDs or Entrez Gene IDs.
 ##' @param chip.db The chip-level array data package corresponding to the gene expression data. If NULL, the assumption will
@@ -171,17 +96,19 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA"){
 ##' @param fitcol Which column of the MArrayLM object corresponds to the coefficient tested by \code{bumphunter}?
 ##' @param cut The p-value cutoff used to select significant 'bumps'.
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
+##' @param orgpkg The organism-level annotation package (e.g., org.Hs.eg.db)
+##' @param fit An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
 ##' @return This returns an HTMLReportRef that can be used to create an index.html page.
-##' @export
+##' @export An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-methByRegion <- function(bmpsObj, eset, fit, mart, samps, contname, longname, genes, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001, dontuse = "AGA"){
+methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001, dontuse = "", orgpkg){
     tab <- bmpsObj$table[bmpsObj$table$p.value <= cut,]
     bmpavg <- getMeans(tab[,1:3], eset)
     if(!file.exists("reports")) dir.create("reports")
     if(!file.exists(paste0("reports/", contname))) dir.create(paste0("reports/", contname))
     for(i in seq_len(ncol(bmpavg))){
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "methplot.png"))
-        makeMethPlot(bumpsObj = tab, eset = eset, fitobj = fit, row = i, fitcol = fitcol,  mart = mart)
+        makeMethPlot(bumpsObj = bmpsObj, eset = eset, row = i, txdb = txdb, samps = samps, dontuse = dontuse, sexfirst = sexfirst)
         dev.off()
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "bwplot.png"))
         bwplotfun(samps, bmpavg[,i,drop = FALSE], dontuse)
@@ -192,8 +119,9 @@ methByRegion <- function(bmpsObj, eset, fit, mart, samps, contname, longname, ge
     uri.meth <- paste0("<a href=\"", uri.meth, "\">Methylation region plot</a>")
     uri.bw <- paste0("<a href=\"", uri.bw, "\">Methylation dotplot</a>")
     if(!is.null(gene.data)){
+        genes <- genes(get(txdb))
         gbm <- geneByMeth(tab = tab[,1:3], genes = genes, eset = eset, samps = samps,
-                          gene.data = gene.data, chip.db = NULL, contname = contname, dontuse = dontuse)
+                          gene.data = gene.data, chip.db = NULL, contname = contname, dontuse = dontuse, orgpkg = orgpkg)
         uris2 <- gsub("reports//", "", sapply(gbm, function(x) path(x[[2]])))
         uris2 <- paste0("<a href=\"", uris2,"\">",gsub("\\.html","", uris2), "</a>")
         out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth, Dotplots = uri.bw)
@@ -218,18 +146,15 @@ methByRegion <- function(bmpsObj, eset, fit, mart, samps, contname, longname, ge
 ##' @param samps A data.frame that maps samples to phenotype. This data.frame MUST contain columns named Category and Gender!
 ##' @param file A filename. In general this is the genomic region, separated by underscores (e.g., chr1_12345_23456)
 ##' @param contname A contrast name. Usually this is lowercase and separated by underscores (e.g., this_vs_that)
+##' @param orgpkg An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @return This returns an HTMLReportRef.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-plotAndOut <- function(lstitm, eset, prb, samps, file, contname){
-    require("lattice", character.only=TRUE)
-    require("ReportingTools", character.only = TRUE)
-    require("org.Hs.eg.db", character.only = TRUE)
-    ## depvar <- match.arg(depvar, c("birthwt","meth"))
+plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
     if(nrow(lstitm) == 0) return(NULL)
     tmp <- as.vector(colMeans(getM(eset)[prb,,drop = FALSE]))
     samps.x <- samps
     lstitm <- as.matrix(t(lstitm))
-    cn <- sapply(mget(colnames(lstitm), org.Hs.egSYMBOL), "[", 1)
+    cn <- select(get(orgpkg), colnames(lstitm), "SYMBOL")
     colnames(lstitm) <- gsub("-", "_", cn)
     naind <- apply(lstitm, 1, is.na)
     if(is.vector(naind)) dim(naind) <- c(1, length(naind))
@@ -281,14 +206,20 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname){
 ##' are ENTREZ GENE IDs.
 ##' @param contname A contrast name, used to name the directory where these data will be stored. Usually of the form 'this_vs_that'.
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
+##' @param orgpkg An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @return This function returns a list of HTMLReportRef items that can be used to create links.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, dontuse = "AGA"){
+geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, dontuse = "", orgpkg){
     methranges <- GRanges(tab[,1], IRanges(tab[,2], tab[,3]))
     probes <- apply(tab, 1, paste, collapse = "_")
     probes <- gsub("\\s+", "", probes, perl = TRUE)
     probelst <- lapply(1:length(methranges), function(x) names(rowData(eset))[rowData(eset) %over% methranges[x,]])
     methranges <- resize(methranges, 1e6, "center")
+    if(!is.null(chip.db)){
+        annot <- select(get(chip.db), row.names(gene.data), "ENTREZID")
+    }else{
+        annot <- data.frame(ENTREZID = row.names(gene.data))
+    }
     genlst <- lapply(seq_len(length(methranges)), function(x) names(genes[subjectHits(findOverlaps(methranges[x,], genes)),]))
     gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot$ENTREZID %in% x, -1]
                                               gd <- gd[,!samps$Category %in% dontuse]
@@ -299,7 +230,7 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, d
                                               return(gd)})
     methdat.out <- lapply(seq_len(length(gendatlst)), function(x) plotAndOut(gendatlst[[x]], eset[,!samps$Category %in% dontuse], probelst[[x]], 
                                                                              samps[!samps$Category %in% dontuse,], 
-                                                                             probes[x], contname))
+                                                                             probes[x], contname, orgpkg))
     methdat.out
 }
 
