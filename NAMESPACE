@@ -1,7 +1,7 @@
 export(makeMethPlot)
 export(methByRegion)
 importFrom(ReportingTools, HTMLReport, publish, finish, Link)
-importFrom(Gviz, DataTrack, IdeogramTrack, GenomeAxisTrack, GeneRegionTrack)
+importFrom(Gviz, DataTrack, IdeogramTrack, GenomeAxisTrack, GeneRegionTrack,plotTracks)
 importFrom(GenomicRanges, GRanges, GRangesList, rowData)
 importFrom(IRanges, IRanges, '%over%', findOverlaps, subjectHits)
 importFrom(minfi, getM)
