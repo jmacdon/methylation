@@ -10,7 +10,7 @@ Depends:
 License: Artistic-2.0
 LazyData: true
 Imports:
-    Gviz,minfi,
+    Gviz,minfi,grid,
     ReportingTools,
     GenomicFeatures,
     GenomicRanges,IRanges,lattice,AnnotationDbi

@@ -4,7 +4,9 @@
 \usage{
   methByRegion(bmpsObj, eset, samps, contname, longname,
     txdb, gene.data = NULL, chip.db = NULL, fitcol,
-    cut = 0.001, dontuse = "", orgpkg)
+    cut = 0.001,
+    cutcol = c("p.value", "fwer", "p.valueArea", "fwerArea"),
+    dontuse = "", orgpkg)
 }
 \arguments{
   \item{bmpsObj}{The output from \code{bumphunter}}
@@ -43,6 +45,9 @@
 
   \item{cut}{The p-value cutoff used to select significant
   'bumps'.}
+
+  \item{cutcol}{Which column of the bumpsObj table item to
+  use for defining the p-value cutoff?}
 
   \item{dontuse}{Which Categories from the samps data.frame
   should we NOT use? If only two Category levels, use "".}

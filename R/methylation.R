@@ -95,14 +95,18 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA"){
 ##' be made that the row.names are ENTREZ GENE IDs.
 ##' @param fitcol Which column of the MArrayLM object corresponds to the coefficient tested by \code{bumphunter}?
 ##' @param cut The p-value cutoff used to select significant 'bumps'.
+##' @param cutcol Which column of the bumpsObj table item to use for defining the p-value cutoff?
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
 ##' @param orgpkg The organism-level annotation package (e.g., org.Hs.eg.db)
 ##' @param fit An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
 ##' @return This returns an HTMLReportRef that can be used to create an index.html page.
 ##' @export An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001, dontuse = "", orgpkg){
-    tab <- bmpsObj$table[bmpsObj$table$p.value <= cut,]
+methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001,
+                         cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg){
+    cutcol <- match.arg(cutcol,  c("p.value", "fwer","p.valueArea", "fwerArea"))
+    cutcol <- get(paste0("bmpsObj$table$", cutcol))
+    tab <- bmpsObj$table[cutcol <= cut,]
     bmpavg <- getMeans(tab[,1:3], eset)
     if(!file.exists("reports")) dir.create("reports")
     if(!file.exists(paste0("reports/", contname))) dir.create(paste0("reports/", contname))
@@ -234,3 +238,18 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, d
     methdat.out
 }
 
+##' Compute means from methylation data
+##'
+##' This function is an internal function and not intended for use by end users. The purpose is to
+##' compute mean methylation data that will be used for creating dotplots
+##' @title Get mean methylation data
+##' @param bmptab The table item from a bumps object created from running \code{bumphunter} on methylation data
+##' @param eset A GenomicRatioSet or MethylSet.
+##' @return A data.frame containing the mean expression for all probes within all differentially methylated regions.
+##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
+getMeans <- function(bmptab, eset){
+    gr <- GRanges(bmptab$chr, IRanges(start = bmptab$start, end = bmptab$end))
+    dat <- sapply(1:nrow(bmptab), function(x) colMeans(getM(eset[rowData(eset) %over% gr[x,],])))
+    colnames(dat) <- apply(bmptab, 1, function(x) paste(gsub("\\s+", "", x, perl=TRUE), collapse = "_"))
+    dat
+}
