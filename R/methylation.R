@@ -12,13 +12,15 @@
 ##' @param samps A data.frame containing sample information. This data.frame must contain two columns; one called Gender, listing the gender of
 ##' each sex, and one called Category, listing the category for each sample
 ##' @param dontuse A character vector of Category levels that won't be plotted. If using all levels, this argument is "".
+##' @param stratifyBySex Boolean. Should we plot the data stratified by sex?
 ##' @param sexfirst Which sex should be plotted first? In general this is the sex for which the bump being shown was significant.
+##' Only used if stratifyBySex is \code{TRUE}.
 ##' @param use.symbols Should we convert transcript IDs to gene symbols?
 ##' @param fitobj An MArrayLM object, after fitting the same model as bumphunter. This is the source of the methylation data in the plot
 ##' @return This function doesn't return anything. It is only called for the side effect of creating a plot.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 ##' @export
-makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "", sexfirst = "Male", use.symbols = TRUE){
+makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "", stratifyBySex = FALSE, sexfirst = "Male", use.symbols = TRUE){
     if(!"Gender" %in% colnames(samps))
         stop("There must be a 'Gender' column in the samps data.frame!\n", call. = FALSE)
     if(!all(c("Male","Female") %in% samps$Gender))
@@ -44,9 +46,9 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
         grTrack@range <- tmp
     }
     dtm <- dtf <- rowData(eset)[rowData(eset) %over% reg,]
-    elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
-    elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
-    if(sexfirst == "Male"){
+    if(sexfirst == "Male" && stratifyBySex){
+        elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
+        elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
         dTrackM <- DataTrack(dtm, name = "Male methylation", 
                              groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
                              type = c("a","p"))
@@ -54,15 +56,20 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
                              groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
                              type = c("a","p"), legend = TRUE)
         plotTracks(list(iTrack, gTrack, grTrack, dTrackM, dTrackF), from = start(reg), to = end(reg), background.title = "darkblue")
-    } else {
-         dTrackM <- DataTrack(dtm, name = "Male methylation", 
+    } else if(sexfirst == "Female" && stratifyBySex){
+        dTrackM <- DataTrack(dtm, name = "Male methylation", 
                              groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
                              type = c("a","p"), legend = TRUE)
         dTrackF <- DataTrack(dtf, name = "Female methylation", 
                              groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
                              type = c("a","p"))
         plotTracks(list(iTrack, gTrack, grTrack, dTrackF, dTrackM), from = start(reg), to = end(reg), background.title = "darkblue")
-     }
+    } else {
+        elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, !samps$Category %in% dontuse, drop = FALSE]
+        dTrack <- DataTrack(dtm, name = "Methylation", groups = as.character(samps$Category[!samps$Category %in% dontuse]),
+                            type = c("a","p"), legend = TRUE)
+        plotTracks(list(iTrack, gTrack, grTrack, dTrack), from = start(reg), to = end(reg), background.title = "darkblue")
+    }
 }
 
 ##' Generate sex-stratified dotplot of methylation for a given region.
@@ -74,14 +81,25 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
 ##' @param samps A data.frame that maps samples to phenotype. There must be both a Category and Gender column.
 ##' @param bumpavg Mean methylation data, usually from a call to \code{getMeans}
 ##' @param dontuse Category levels that are not to be used in the dotplot. If there are only two levels, use "".
+##' @param stratifyBySex Boolean. Should the dotplot be stratified by sex? Defaults to \code{FALSE}.
+##' @param extra.indeps Are we fitting a model with extra independent variables? This must be a character vector,
+##' and all values must be column names for the samps data.frame.
 ##' @return Nothing is returned. Only called for the side effect of creating a dotplot.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-bwplotfun <- function(samps, bumpavg, dontuse = "AGA"){
+bwplotfun <- function(samps, bumpavg, dontuse = "AGA", stratifyBySex = FALSE, extra.indeps = NULL){
+    if(!is.null(extra.indeps)){
+        tmpbump <- cbind(samps, bumavg)
+        for(i in colnames(bmpavg)) bumpavg[[i]] <- resid(lm(as.formula(paste(i, "~", paste(extra.indeps, collapse = " + "))), tmpbump))
+        bumpavg <- tmpbump[,colnames(bumpavg)]
+    }
     for(i in seq_len(ncol(bumpavg))){
         tmp <- data.frame(meth = bumpavg[!samps$Category %in% dontuse,i],
                           cat = factor(samps$Category[!samps$Category %in% dontuse]),
                           gend = factor(samps$Gender[!samps$Category %in% dontuse], labels = c("Female","Male")))
-        print(dotplot(meth~cat|gend, tmp, ylab = paste0("Methylation of genomic region ", colnames(bumpavg)[i])))
+        if(stratifyBySex)
+            print(dotplot(meth~cat|gend, tmp, ylab = paste0("Methylation of genomic region ", colnames(bumpavg)[i])))
+        else
+            print(dotplot(meth~cat, tmp, ylab = paste0("Methylation of genomic region ", colnames(bumpavg)[i])))
     }
 }
 
@@ -114,14 +132,25 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA"){
 ##' @param cutcol Which column of the bumpsObj table item to use for defining the p-value cutoff?
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
 ##' @param orgpkg The organism-level annotation package (e.g., Homo.sapiens)
-##' @param sexfirst Which sex should be plotted first? Defaults to Male.
+##' @param stratifyBySex Boolean. Should data be plotted stratified by sex? Defaults to \code{FALSE}.
+##' @param sexfirst Which sex should be plotted first? Defaults to Male. Only used if stratifyBySex is \code{TRUE}.
 ##' @param use.symbols Should transcript IDs be converted to gene symbols when plotting gene regions?
+##' @param extra.indeps A character vector of extra independent variables to use when fitting a model regressing gene expression on
+##' methylation status (e.g., sex, age, etc). These must conform to column names of the samps data.frame.
 ##' @param fit An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
 ##' @return This returns an HTMLReportRef that can be used to create an index.html page.
 ##' @export An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001,
-                         cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg, sexfirst = "Male", use.symbols = TRUE){
+                         cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg, stratifyBySex = FALSE,
+                         sexfirst = "Male", use.symbols = TRUE, extra.indeps = NULL){
+    if(stratifyBySex && !"Gender" %in% colnames(samps))
+        stop("If you want to stratify by sex, there has to be a column in the samps data.frame called 'Gender'!\n", call. = FALSE)
+    if(!is.null(extra.indeps) && !all(extra.indeps %in% colnames(samps)))
+        stop(paste("All of the arguments for extra.indeps have to be among the column names for the samps data.frame:", colnames(samps), "\n"),
+             call. = FALSE)
+    if(stratifyBySex && "Gender" %in% extra.indeps)
+        stop("You cannot stratify by sex AND use gender as an independent variable simultaneously!\n", call. = FALSE)
     cutcol <- match.arg(cutcol,  c("p.value", "fwer","p.valueArea", "fwerArea"))
     cutcol <- bmpsObj$table[, cutcol]
     tab <- bmpsObj$table[cutcol <= cut,]
@@ -131,10 +160,10 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
     for(i in seq_len(ncol(bmpavg))){
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "methplot.png"))
         makeMethPlot(bumpsObj = bmpsObj, eset = eset, row = i, txdb = txdb, samps = samps, dontuse = dontuse, sexfirst = sexfirst, orgpkg = orgpkg,
-                     use.symbols = use.symbols)
+                     use.symbols = use.symbols, stratifyBySex = stratifyBySex)
         dev.off()
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "bwplot.png"))
-        bwplotfun(samps, bmpavg[,i,drop = FALSE], dontuse)
+        bwplotfun(samps, bmpavg[,i,drop = FALSE], dontuse, stratifyBySex)
         dev.off()
     }
     uri.meth <- sapply(colnames(bmpavg), function(x) paste0(contname, "/", x, "methplot.png"))
@@ -146,7 +175,8 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
         if(is.character(orgpkg)) orgpkg <- get(orgpkg)
         genes <- genes(txdb)
         gbm <- geneByMeth(tab = tab[,1:3], genes = genes, eset = eset, samps = samps,
-                          gene.data = gene.data, chip.db = chip.db, contname = contname, dontuse = dontuse, orgpkg = orgpkg)
+                          gene.data = gene.data, chip.db = chip.db, contname = contname, dontuse = dontuse, orgpkg = orgpkg,
+                          stratifyBySex = stratifyBySex, extra.indeps = extra.indeps)
         uris2 <- gsub("reports//", "", sapply(gbm, function(x) path(x[[2]])))
         uris2 <- paste0("<a href=\"", uris2,"\">",gsub("\\.html","", uris2), "</a>")
         out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth, Dotplots = uri.bw)
@@ -172,9 +202,12 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
 ##' @param file A filename. In general this is the genomic region, separated by underscores (e.g., chr1_12345_23456)
 ##' @param contname A contrast name. Usually this is lowercase and separated by underscores (e.g., this_vs_that)
 ##' @param orgpkg An organism level annotation package (e.g., Homo.sapiens)
+##' @param stratifyBySex Boolean. Do you want to stratify the plots by sex? Defaults to \code{FALSE}.
+##' @param extra.indeps Additional independent variables to use when fitting the model regressing methylation on gene expression.
+##' These must conform to column names of the samps data.frame.
 ##' @return This returns an HTMLReportRef.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
+plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg, stratifyBySex = FALSE, extra.indeps = NULL){
     if(nrow(lstitm) == 0) return(NULL)
     tmp <- as.vector(colMeans(getM(eset)[prb,,drop = FALSE]))
     samps.x <- samps
@@ -184,24 +217,51 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
     colnames(lstitm) <- gsub("-", "_", cn[,2])
     naind <- apply(lstitm, 1, is.na)
     if(is.vector(naind)) dim(naind) <- c(1, length(naind))
-    samps.x <- cbind(samps.x, tmp, lstitm)
-    out <- lapply(seq_len(ncol(lstitm)), function(x) {
-        dep <- colnames(samps.x)[x + ncol(samps) + 1]
-        mod <- lm(as.formula(paste(dep, "~tmp")), samps.x, subset = Gender == "Male")
-        mal <- summary(mod)$coefficients
-        fem <- summary(update(mod, subset = Gender == "Female"))$coefficients 
-        return(c(fem[2,c(1,4)], mal[2,c(1,4)]))
-    })
-    out <- do.call("rbind", out)
-    colnames(out) <- paste(rep(c("Female","Male"), each = 2), rep(c("methylation effect", "p-value"), 2))
-    for(i in colnames(lstitm)){
-        png(paste0("reports/",contname, "/", file, "_", i, ".png"))
-        print(xyplot(as.formula(paste0(i, "~tmp|Gender")), samps.x, 
-                     panel = function(x, y, ...){panel.xyplot(x, y, ...); 
-                                                 panel.lmline(x, y, ...)},
-                     xlab = paste("Methylation status at", file),
-                     ylab = paste("Expression data for gene", i)))
-        dev.off()
+    samps.x <- samps.y <- cbind(samps.x, tmp, lstitm)
+    indep <- indepall <-  "~tmp"
+    if(!is.null(extra.indeps)) {
+        exindep <-  paste(extra.indeps, collapse = " + ")
+        indepall <- paste(indep, "+", exindep)
+        for(i in colnames(lstitm))
+            samps.y[[i]] <- resid(lm(as.formula(paste(i, "~", exindep)), samps.y))
+    }
+    if(stratifyBySex){
+        out <- lapply(seq_len(ncol(lstitm)), function(x) {
+            dep <- colnames(samps.x)[x + ncol(samps) + 1]
+            mod <- lm(as.formula(paste(dep, indepall)), samps.x, subset = Gender == "Male")
+            mal <- summary(mod)$coefficients
+            fem <- summary(update(mod, subset = Gender == "Female"))$coefficients 
+            return(c(fem[2,c(1,4)], mal[2,c(1,4)]))
+        })
+        out <- do.call("rbind", out)
+        colnames(out) <- paste(rep(c("Female","Male"), each = 2), rep(c("methylation effect", "p-value"), 2))        
+        for(i in colnames(lstitm)){
+            png(paste0("reports/",contname, "/", file, "_", i, ".png"))
+            print(xyplot(as.formula(paste0(i, indep, "|Gender")), samps.y, 
+                         panel = function(x, y, ...){panel.xyplot(x, y, ...); 
+                                                     panel.lmline(x, y, ...)},
+                         xlab = paste("Methylation status at", file),
+                         ylab = paste("Expression data for gene", i)))
+            dev.off()
+        }
+    } else {
+        out <- lapply(seq_len(ncol(lstitm)), function(x) {
+            dep <- colnames(samps.x)[x + ncol(samps) + 1]
+            mod <- lm(as.formula(paste(dep, indepall)), samps.x)
+            coef <- summary(mod)$coefficients
+            return(coef[2,c(1,4)])
+        })
+        out <- do.call("rbind", out)
+        colnames(out) <- c("methylation effect", "p-value")      
+        for(i in colnames(lstitm)){
+            png(paste0("reports/",contname, "/", file, "_", i, ".png"))
+            print(xyplot(as.formula(paste0(i, indep)), samps.y, 
+                         panel = function(x, y, ...){panel.xyplot(x, y, ...); 
+                                                     panel.lmline(x, y, ...)},
+                         xlab = paste("Methylation status at", file),
+                         ylab = paste("Expression data for gene", i)))
+            dev.off()
+        }
     }
     uris <- sapply(colnames(lstitm), function(x) paste0(contname, "/",  file, "_", x,".png"))
     uris <- paste0("<a href=\"", uris, "\">", colnames(lstitm), "</a>")
@@ -233,9 +293,12 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
 ##' @param contname A contrast name, used to name the directory where these data will be stored. Usually of the form 'this_vs_that'.
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
 ##' @param orgpkg An organism level annotation package (e.g., Homo.sapiens)
+##' @param stratifyBySex Boolean. Do you want to stratify the plots by sex? Defaults to \code{FALSE}.
+##' @param extra.indeps Extra independent variables for the model of gene expression regressed on methylation status. These must conform to
+##' column names of the samps data.frame.
 ##' @return This function returns a list of HTMLReportRef items that can be used to create links.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, dontuse = "", orgpkg){
+geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, dontuse = "", orgpkg, stratifyBySex = FALSE, extra.indeps = NULL){
     methranges <- GRanges(tab[,1], IRanges(tab[,2], tab[,3]))
     probes <- apply(tab, 1, paste, collapse = "_")
     probes <- gsub("\\s+", "", probes, perl = TRUE)
@@ -257,7 +320,7 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, d
                                               return(gd)})
     methdat.out <- lapply(seq_len(length(gendatlst)), function(x) plotAndOut(gendatlst[[x]], eset[,!samps$Category %in% dontuse], probelst[[x]], 
                                                                              samps[!samps$Category %in% dontuse,], 
-                                                                             probes[x], contname, orgpkg))
+                                                                             probes[x], contname, orgpkg, stratifyBySex, extra.indeps))
     methdat.out
 }
 
