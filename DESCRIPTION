@@ -9,8 +9,9 @@ Depends:
     R (>= 3.0.2)
 License: Artistic-2.0
 LazyData: true
+Depends: Gviz
 Imports:
-    Gviz,minfi,grid,
+    minfi,grid,
     ReportingTools,
     GenomicFeatures,
     GenomicRanges,IRanges,lattice,AnnotationDbi

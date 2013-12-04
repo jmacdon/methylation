@@ -8,15 +8,23 @@
 ##' @param eset Usually a \code{GenomicRatioSet} created by the minfi package
 ##' @param row Which row of the bumpsObj are we plotting?
 ##' @param txdb A transcript database object (e.g., TxDb.Hsapiens.UCSC.hg19.knownGene)
+##' @param orgpkg A species-level annotation package (e.g., Homo.sapiens)
 ##' @param samps A data.frame containing sample information. This data.frame must contain two columns; one called Gender, listing the gender of
 ##' each sex, and one called Category, listing the category for each sample
 ##' @param dontuse A character vector of Category levels that won't be plotted. If using all levels, this argument is "".
 ##' @param sexfirst Which sex should be plotted first? In general this is the sex for which the bump being shown was significant.
+##' @param use.symbols Should we convert transcript IDs to gene symbols?
 ##' @param fitobj An MArrayLM object, after fitting the same model as bumphunter. This is the source of the methylation data in the plot
 ##' @return This function doesn't return anything. It is only called for the side effect of creating a plot.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 ##' @export
-makeMethPlot <- function(bumpsObj, eset, row, txdb, samps, dontuse = "", sexfirst = "Male"){
+makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "", sexfirst = "Male", use.symbols = TRUE){
+    if(!"Gender" %in% colnames(samps))
+        stop("There must be a 'Gender' column in the samps data.frame!\n", call. = FALSE)
+    if(!all(c("Male","Female") %in% samps$Gender))
+        stop("There must be both Male and Female in the Gender column of the samps data.frame!\n", call. = FALSE)
+    if(is.character(txdb)) txdb <- get(txdb)
+    if(is.character(orgpkg)) orgpkg <- get(orgpkg)
     genome <- genome(eset)[1]
     chr <- bumpsObj$table[row,1]
     start <- bumpsObj$table[row,2]
@@ -27,9 +35,17 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, samps, dontuse = "", sexfirs
     gTrack <- GenomeAxisTrack()
     grTrack <- GeneRegionTrack(txdb, genome = genome, chromosome = chr, start = start(reg), end = end(reg),
                                showId = TRUE, name = "Transcripts")
+    tmp <- grTrack@range
+    if(use.symbols && length(tmp) > 0){
+        mapper <- select(orgpkg, elementMetadata(tmp)$symbol, "SYMBOL","TXNAME")
+        mp <- mapper[,2]
+        names(mp) <- mapper[,1]
+        elementMetadata(tmp)$symbol <- mp[elementMetadata(tmp)$symbol]
+        grTrack@range <- tmp
+    }
     dtm <- dtf <- rowData(eset)[rowData(eset) %over% reg,]
-    elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse]
-    elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse]
+    elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
+    elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
     if(sexfirst == "Male"){
         dTrackM <- DataTrack(dtm, name = "Male methylation", 
                              groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
@@ -37,7 +53,7 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, samps, dontuse = "", sexfirs
         dTrackF <- DataTrack(dtf, name = "Female methylation", 
                              groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
                              type = c("a","p"), legend = TRUE)
-        plotTracks(list(iTrack, gTrack, grTrack, dTrackM, dTrackF), from = start(reg), to = end(reg))
+        plotTracks(list(iTrack, gTrack, grTrack, dTrackM, dTrackF), from = start(reg), to = end(reg), background.title = "darkblue")
     } else {
          dTrackM <- DataTrack(dtm, name = "Male methylation", 
                              groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
@@ -97,22 +113,25 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA"){
 ##' @param cut The p-value cutoff used to select significant 'bumps'.
 ##' @param cutcol Which column of the bumpsObj table item to use for defining the p-value cutoff?
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
-##' @param orgpkg The organism-level annotation package (e.g., org.Hs.eg.db)
+##' @param orgpkg The organism-level annotation package (e.g., Homo.sapiens)
+##' @param sexfirst Which sex should be plotted first? Defaults to Male.
+##' @param use.symbols Should transcript IDs be converted to gene symbols when plotting gene regions?
 ##' @param fit An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
 ##' @return This returns an HTMLReportRef that can be used to create an index.html page.
 ##' @export An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001,
-                         cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg){
+                         cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg, sexfirst = "Male", use.symbols = TRUE){
     cutcol <- match.arg(cutcol,  c("p.value", "fwer","p.valueArea", "fwerArea"))
-    cutcol <- get(paste0("bmpsObj$table$", cutcol))
+    cutcol <- bmpsObj$table[, cutcol]
     tab <- bmpsObj$table[cutcol <= cut,]
     bmpavg <- getMeans(tab[,1:3], eset)
     if(!file.exists("reports")) dir.create("reports")
     if(!file.exists(paste0("reports/", contname))) dir.create(paste0("reports/", contname))
     for(i in seq_len(ncol(bmpavg))){
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "methplot.png"))
-        makeMethPlot(bumpsObj = bmpsObj, eset = eset, row = i, txdb = txdb, samps = samps, dontuse = dontuse, sexfirst = sexfirst)
+        makeMethPlot(bumpsObj = bmpsObj, eset = eset, row = i, txdb = txdb, samps = samps, dontuse = dontuse, sexfirst = sexfirst, orgpkg = orgpkg,
+                     use.symbols = use.symbols)
         dev.off()
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "bwplot.png"))
         bwplotfun(samps, bmpavg[,i,drop = FALSE], dontuse)
@@ -123,9 +142,11 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
     uri.meth <- paste0("<a href=\"", uri.meth, "\">Methylation region plot</a>")
     uri.bw <- paste0("<a href=\"", uri.bw, "\">Methylation dotplot</a>")
     if(!is.null(gene.data)){
-        genes <- genes(get(txdb))
+        if(is.character(txdb)) txdb <- get(txdb)
+        if(is.character(orgpkg)) orgpkg <- get(orgpkg)
+        genes <- genes(txdb)
         gbm <- geneByMeth(tab = tab[,1:3], genes = genes, eset = eset, samps = samps,
-                          gene.data = gene.data, chip.db = NULL, contname = contname, dontuse = dontuse, orgpkg = orgpkg)
+                          gene.data = gene.data, chip.db = chip.db, contname = contname, dontuse = dontuse, orgpkg = orgpkg)
         uris2 <- gsub("reports//", "", sapply(gbm, function(x) path(x[[2]])))
         uris2 <- paste0("<a href=\"", uris2,"\">",gsub("\\.html","", uris2), "</a>")
         out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth, Dotplots = uri.bw)
@@ -150,7 +171,7 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
 ##' @param samps A data.frame that maps samples to phenotype. This data.frame MUST contain columns named Category and Gender!
 ##' @param file A filename. In general this is the genomic region, separated by underscores (e.g., chr1_12345_23456)
 ##' @param contname A contrast name. Usually this is lowercase and separated by underscores (e.g., this_vs_that)
-##' @param orgpkg An organism level annotation package (e.g., org.Hs.eg.db)
+##' @param orgpkg An organism level annotation package (e.g., Homo.sapiens)
 ##' @return This returns an HTMLReportRef.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
@@ -158,13 +179,14 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
     tmp <- as.vector(colMeans(getM(eset)[prb,,drop = FALSE]))
     samps.x <- samps
     lstitm <- as.matrix(t(lstitm))
-    cn <- select(get(orgpkg), colnames(lstitm), "SYMBOL")
-    colnames(lstitm) <- gsub("-", "_", cn)
+    if(is.character(orgpkg)) orgpkg <- get(orgpkg)
+    cn <- select(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID")
+    colnames(lstitm) <- gsub("-", "_", cn[,2])
     naind <- apply(lstitm, 1, is.na)
     if(is.vector(naind)) dim(naind) <- c(1, length(naind))
     samps.x <- cbind(samps.x, tmp, lstitm)
     out <- lapply(seq_len(ncol(lstitm)), function(x) {
-        dep <- colnames(samps.x)[x+7]
+        dep <- colnames(samps.x)[x + ncol(samps) + 1]
         mod <- lm(as.formula(paste(dep, "~tmp")), samps.x, subset = Gender == "Male")
         mal <- summary(mod)$coefficients
         fem <- summary(update(mod, subset = Gender == "Female"))$coefficients 
@@ -210,7 +232,7 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg){
 ##' are ENTREZ GENE IDs.
 ##' @param contname A contrast name, used to name the directory where these data will be stored. Usually of the form 'this_vs_that'.
 ##' @param dontuse Which Categories from the samps data.frame should we NOT use? If only two Category levels, use "".
-##' @param orgpkg An organism level annotation package (e.g., org.Hs.eg.db)
+##' @param orgpkg An organism level annotation package (e.g., Homo.sapiens)
 ##' @return This function returns a list of HTMLReportRef items that can be used to create links.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, dontuse = "", orgpkg){
@@ -220,12 +242,13 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, d
     probelst <- lapply(1:length(methranges), function(x) names(rowData(eset))[rowData(eset) %over% methranges[x,]])
     methranges <- resize(methranges, 1e6, "center")
     if(!is.null(chip.db)){
-        annot <- select(get(chip.db), row.names(gene.data), "ENTREZID")
+        if(is.character(chip.db)) chip.db <- get(chip.db)
+        annot <- select(chip.db, row.names(gene.data), "ENTREZID")
     }else{
         annot <- data.frame(ENTREZID = row.names(gene.data))
     }
     genlst <- lapply(seq_len(length(methranges)), function(x) names(genes[subjectHits(findOverlaps(methranges[x,], genes)),]))
-    gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot$ENTREZID %in% x, -1]
+    gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot$ENTREZID %in% x, ]
                                               gd <- gd[,!samps$Category %in% dontuse]
                                               nam <- annot$ENTREZID[annot$ENTREZID %in% x]
                                               gd <- gd[!duplicated(nam),]
