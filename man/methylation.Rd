@@ -4,6 +4,6 @@
 \alias{methylation-package}
 \title{methylation}
 \description{
-  methylation
+methylation
 }
 

@@ -17,14 +17,19 @@
 ##' Only used if stratifyBySex is \code{TRUE}.
 ##' @param use.symbols Should we convert transcript IDs to gene symbols?
 ##' @param fitobj An MArrayLM object, after fitting the same model as bumphunter. This is the source of the methylation data in the plot
+##' @param linearfit Boolean. Are we fitting a continuous covariate \code{TRUE} or ANOVA \code{FALSE}. Defaults to \code{FALSE}.
+##' @param coefcol If a linear fit, which coefficient of the fitobj is the slope?
 ##' @return This function doesn't return anything. It is only called for the side effect of creating a plot.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 ##' @export
-makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "", stratifyBySex = FALSE, sexfirst = "Male", use.symbols = TRUE){
+makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "", stratifyBySex = FALSE, sexfirst = "Male", use.symbols = TRUE,
+                         fitobj = NULL, linearfit = FALSE, coefcol = NULL){
     if(!"Gender" %in% colnames(samps))
         stop("There must be a 'Gender' column in the samps data.frame!\n", call. = FALSE)
     if(!all(c("Male","Female") %in% samps$Gender))
         stop("There must be both Male and Female in the Gender column of the samps data.frame!\n", call. = FALSE)
+    if(linearfit && is.null(coefcol)) stop("If using a linear fit, you must specify the column of the fit object that contains the slope beta!\n",
+                                           call. = FALSE)
     if(is.character(txdb)) txdb <- get(txdb)
     if(is.character(orgpkg)) orgpkg <- get(orgpkg)
     genome <- genome(eset)[1]
@@ -46,28 +51,34 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
         grTrack@range <- tmp
     }
     dtm <- dtf <- rowData(eset)[rowData(eset) %over% reg,]
-    if(sexfirst == "Male" && stratifyBySex){
-        elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
-        elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
-        dTrackM <- DataTrack(dtm, name = "Male methylation", 
-                             groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
-                             type = c("a","p"))
-        dTrackF <- DataTrack(dtf, name = "Female methylation", 
-                             groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
-                             type = c("a","p"), legend = TRUE)
-        plotTracks(list(iTrack, gTrack, grTrack, dTrackM, dTrackF), from = start(reg), to = end(reg), background.title = "darkblue")
-    } else if(sexfirst == "Female" && stratifyBySex){
-        dTrackM <- DataTrack(dtm, name = "Male methylation", 
-                             groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
-                             type = c("a","p"), legend = TRUE)
-        dTrackF <- DataTrack(dtf, name = "Female methylation", 
-                             groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
-                             type = c("a","p"))
-        plotTracks(list(iTrack, gTrack, grTrack, dTrackF, dTrackM), from = start(reg), to = end(reg), background.title = "darkblue")
-    } else {
-        elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, !samps$Category %in% dontuse, drop = FALSE]
-        dTrack <- DataTrack(dtm, name = "Methylation", groups = as.character(samps$Category[!samps$Category %in% dontuse]),
-                            type = c("a","p"), legend = TRUE)
+    if(!linearfit){
+        if(sexfirst == "Male" && stratifyBySex){
+            elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
+            elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
+            dTrackM <- DataTrack(dtm, name = "Male methylation", 
+                                 groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
+                                 type = c("a","p"))
+            dTrackF <- DataTrack(dtf, name = "Female methylation", 
+                                 groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
+                                 type = c("a","p"), legend = TRUE)
+            plotTracks(list(iTrack, gTrack, grTrack, dTrackM, dTrackF), from = start(reg), to = end(reg), background.title = "darkblue")
+        } else if(sexfirst == "Female" && stratifyBySex){
+            dTrackM <- DataTrack(dtm, name = "Male methylation", 
+                                 groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
+                                 type = c("a","p"), legend = TRUE)
+            dTrackF <- DataTrack(dtf, name = "Female methylation", 
+                                 groups = as.character(samps$Category[samps$Gender == "Female" & !samps$Category %in% dontuse]),
+                                 type = c("a","p"))
+            plotTracks(list(iTrack, gTrack, grTrack, dTrackF, dTrackM), from = start(reg), to = end(reg), background.title = "darkblue")
+        } else {
+            elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, !samps$Category %in% dontuse, drop = FALSE]
+            dTrack <- DataTrack(dtm, name = "Methylation", groups = as.character(samps$Category[!samps$Category %in% dontuse]),
+                                type = c("a","p"), legend = TRUE)
+            plotTracks(list(iTrack, gTrack, grTrack, dTrack), from = start(reg), to = end(reg), background.title = "darkblue")
+        }
+    }else{
+        elementMetadata(dtm) <- fitobj$coef[names(dtm),coefcol]
+        dTrack <- DataTrack(dtm, name = "Change in methylation", type = c("a", "p"))
         plotTracks(list(iTrack, gTrack, grTrack, dTrack), from = start(reg), to = end(reg), background.title = "darkblue")
     }
 }
@@ -127,6 +138,7 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA", stratifyBySex = FALSE, ex
 ##' data.frame must correspond exactly to columns of the methylation data. Row names must be array IDs or Entrez Gene IDs.
 ##' @param chip.db The chip-level array data package corresponding to the gene expression data. If NULL, the assumption will
 ##' be made that the row.names are ENTREZ GENE IDs.
+##' @param fitobj An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
 ##' @param fitcol Which column of the MArrayLM object corresponds to the coefficient tested by \code{bumphunter}?
 ##' @param cut The p-value cutoff used to select significant 'bumps'.
 ##' @param cutcol Which column of the bumpsObj table item to use for defining the p-value cutoff?
@@ -137,13 +149,13 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA", stratifyBySex = FALSE, ex
 ##' @param use.symbols Should transcript IDs be converted to gene symbols when plotting gene regions?
 ##' @param extra.indeps A character vector of extra independent variables to use when fitting a model regressing gene expression on
 ##' methylation status (e.g., sex, age, etc). These must conform to column names of the samps data.frame.
-##' @param fit An MArrayLM object, created by fitting the same model as used by \code{bumphunter}, but probe-wise using the limma package
+##' @param linearfit Boolean. If the underlying model is an ANOVA, this is \code{FALSE}, if fitting to a continuous covariate, it is \code{TRUE}.
 ##' @return This returns an HTMLReportRef that can be used to create an index.html page.
 ##' @export An organism level annotation package (e.g., org.Hs.eg.db)
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitcol, cut = 0.001,
+methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitobj = NULL, fitcol = NULL, cut = 0.001,
                          cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg, stratifyBySex = FALSE,
-                         sexfirst = "Male", use.symbols = TRUE, extra.indeps = NULL){
+                         sexfirst = "Male", use.symbols = TRUE, extra.indeps = NULL, linearfit = FALSE){
     if(stratifyBySex && !"Gender" %in% colnames(samps))
         stop("If you want to stratify by sex, there has to be a column in the samps data.frame called 'Gender'!\n", call. = FALSE)
     if(!is.null(extra.indeps) && !all(extra.indeps %in% colnames(samps)))
@@ -151,6 +163,9 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
              call. = FALSE)
     if(stratifyBySex && "Gender" %in% extra.indeps)
         stop("You cannot stratify by sex AND use gender as an independent variable simultaneously!\n", call. = FALSE)
+    if(linearfit && any(is.null(fitobj), is.null(fitcol)))
+        stop(paste("If doing a linear fit, you must supply both an MArrayLM object and the column of the MArrayLM object",
+                   "that corresponds to the slope beta!\n"), call. = FALSE)
     cutcol <- match.arg(cutcol,  c("p.value", "fwer","p.valueArea", "fwerArea"))
     cutcol <- bmpsObj$table[, cutcol]
     tab <- bmpsObj$table[cutcol <= cut,]
@@ -160,16 +175,19 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
     for(i in seq_len(ncol(bmpavg))){
         png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "methplot.png"))
         makeMethPlot(bumpsObj = bmpsObj, eset = eset, row = i, txdb = txdb, samps = samps, dontuse = dontuse, sexfirst = sexfirst, orgpkg = orgpkg,
-                     use.symbols = use.symbols, stratifyBySex = stratifyBySex)
+                     use.symbols = use.symbols, stratifyBySex = stratifyBySex, linearfit = linearfit, fitobj = fitobj, coefcol = fitcol)
         dev.off()
-        png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "bwplot.png"))
-        bwplotfun(samps, bmpavg[,i,drop = FALSE], dontuse, stratifyBySex)
-        dev.off()
+        if(!linearfit){
+            png(paste0("reports/", contname, "/", colnames(bmpavg)[i], "bwplot.png"))
+            bwplotfun(samps, bmpavg[,i,drop = FALSE], dontuse, stratifyBySex)
+            dev.off()
+            uri.bw <- sapply(colnames(bmpavg), function(x) paste0(contname, "/", x, "bwplot.png"))
+            uri.bw <- paste0("<a href=\"", uri.bw, "\">Methylation dotplot</a>")
+        }
     }
     uri.meth <- sapply(colnames(bmpavg), function(x) paste0(contname, "/", x, "methplot.png"))
-    uri.bw <- sapply(colnames(bmpavg), function(x) paste0(contname, "/", x, "bwplot.png"))
     uri.meth <- paste0("<a href=\"", uri.meth, "\">Methylation region plot</a>")
-    uri.bw <- paste0("<a href=\"", uri.bw, "\">Methylation dotplot</a>")
+         
     if(!is.null(gene.data)){
         if(is.character(txdb)) txdb <- get(txdb)
         if(is.character(orgpkg)) orgpkg <- get(orgpkg)
@@ -179,9 +197,17 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
                           stratifyBySex = stratifyBySex, extra.indeps = extra.indeps)
         uris2 <- gsub("reports//", "", sapply(gbm, function(x) path(x[[2]])))
         uris2 <- paste0("<a href=\"", uris2,"\">",gsub("\\.html","", uris2), "</a>")
-        out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth, Dotplots = uri.bw)
+        if(linearfit){
+            out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth)
+        }else{
+            out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth, Dotplots = uri.bw)
+        }
     }else{
-        out <- data.frame(Regions = apply(tab, 1, paste, collapse = "_"),  Gene.regions = uri.meth, Dotplots = uri.bw)
+        if(linearfit){
+             out <- data.frame(Regions = apply(tab, 1, paste, collapse = "_"),  Gene.regions = uri.meth)
+         }else{
+             out <- data.frame(Regions = apply(tab, 1, paste, collapse = "_"),  Gene.regions = uri.meth, Dotplots = uri.bw)
+         }
     }
     htmlFile <- HTMLReport(contname, longname, "reports/")
     publish(out, htmlFile)
@@ -298,7 +324,7 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg, stratif
 ##' column names of the samps data.frame.
 ##' @return This function returns a list of HTMLReportRef items that can be used to create links.
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
-geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db, contname, dontuse = "", orgpkg, stratifyBySex = FALSE, extra.indeps = NULL){
+geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db = NULL, contname, dontuse = "", orgpkg, stratifyBySex = FALSE, extra.indeps = NULL){
     methranges <- GRanges(tab[,1], IRanges(tab[,2], tab[,3]))
     probes <- apply(tab, 1, paste, collapse = "_")
     probes <- gsub("\\s+", "", probes, perl = TRUE)

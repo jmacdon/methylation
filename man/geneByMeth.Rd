@@ -2,8 +2,8 @@
 \alias{geneByMeth}
 \title{Correlate methylation and gene expression data.}
 \usage{
-  geneByMeth(tab, genes, eset, samps, gene.data, chip.db,
-    contname, dontuse = "", orgpkg)
+geneByMeth(tab, genes, eset, samps, gene.data, chip.db = NULL, contname,
+  dontuse = "", orgpkg, stratifyBySex = FALSE, extra.indeps = NULL)
 }
 \arguments{
   \item{tab}{A data.frame containing the chromosome, start,
@@ -40,33 +40,41 @@
   should we NOT use? If only two Category levels, use "".}
 
   \item{orgpkg}{An organism level annotation package (e.g.,
-  org.Hs.eg.db)}
+  Homo.sapiens)}
+
+  \item{stratifyBySex}{Boolean. Do you want to stratify the
+  plots by sex? Defaults to \code{FALSE}.}
+
+  \item{extra.indeps}{Extra independent variables for the
+  model of gene expression regressed on methylation status.
+  These must conform to column names of the samps
+  data.frame.}
 }
 \value{
-  This function returns a list of HTMLReportRef items that
-  can be used to create links.
+This function returns a list of HTMLReportRef items that
+can be used to create links.
 }
 \description{
-  Get genes within a 1 Mb region centered on a methylation
-  region and fit linear models with methylation status as
-  independent variable and gene expression as dependent
-  variable
+Get genes within a 1 Mb region centered on a methylation
+region and fit linear models with methylation status as
+independent variable and gene expression as dependent
+variable
 }
 \details{
-  This function takes a table of differentially methylated
-  regions, selects the genes that are within 1 Mb of a
-  given region, and then fits models that test for a
-  relationship between methylation status and gene
-  expression. In order for this to work correctly the gene
-  expression and methylation data must be in corresponding
-  columns (e.g., sample 1 must be in the first column of
-  the methylation data as well as the expression data). In
-  addition, the row.names of the gene expression data have
-  to be the manufacturer IDs, so we can figure out what
-  genes are being interrogated. Otherwise, the row.names
-  can be ENTREZ GENE IDs.
+This function takes a table of differentially methylated
+regions, selects the genes that are within 1 Mb of a given
+region, and then fits models that test for a relationship
+between methylation status and gene expression. In order
+for this to work correctly the gene expression and
+methylation data must be in corresponding columns (e.g.,
+sample 1 must be in the first column of the methylation
+data as well as the expression data). In addition, the
+row.names of the gene expression data have to be the
+manufacturer IDs, so we can figure out what genes are being
+interrogated. Otherwise, the row.names can be ENTREZ GENE
+IDs.
 }
 \author{
-  James W. MacDonald (\email{jmacdon@u.washington.edu})
+James W. MacDonald (\email{jmacdon@u.washington.edu})
 }
 
