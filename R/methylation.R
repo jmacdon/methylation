@@ -151,7 +151,7 @@ bwplotfun <- function(samps, bumpavg, dontuse = "AGA", stratifyBySex = FALSE, ex
 ##' methylation status (e.g., sex, age, etc). These must conform to column names of the samps data.frame.
 ##' @param linearfit Boolean. If the underlying model is an ANOVA, this is \code{FALSE}, if fitting to a continuous covariate, it is \code{TRUE}.
 ##' @return This returns an HTMLReportRef that can be used to create an index.html page.
-##' @export An organism level annotation package (e.g., org.Hs.eg.db)
+##' @export 
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.data = NULL, chip.db = NULL, fitobj = NULL, fitcol = NULL, cut = 0.001,
                          cutcol = c("p.value", "fwer","p.valueArea", "fwerArea"), dontuse = "", orgpkg, stratifyBySex = FALSE,
