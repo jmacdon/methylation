@@ -13,5 +13,5 @@ is occurring? That's what this package does.
 
 In addition, this package uses the Bioconductor ReportingTools package to create HTML tables that
 present the results for a given analysis in an HTML table, with clickable links to the above plots. 
-This tends to be a nice format to give to collaborators, so they can peruse results and look at pretty
-pictures, to boot!
+This tends to be a nice format to give to collaborators, so they can easily peruse the results, and 
+also look at graphical representations of significant genomic regions.
