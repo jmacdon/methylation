@@ -10,3 +10,8 @@ methylated. Once you have a set of regions that might be differentially methylat
 wouldn't it be sweet to be able to make a plot that shows the genomic region, any genes/transcripts
 in that region, and plot the methylation data to show where the differential methylation
 is occurring? That's what this package does.
+
+In addition, this package uses the Bioconductor ReportingTools package to create HTML tables that
+present the results for a given analysis in an HTML table, with clickable links to the above plots. 
+This tends to be a nice format to give to collaborators, so they can peruse results and look at pretty
+pictures, to boot!
