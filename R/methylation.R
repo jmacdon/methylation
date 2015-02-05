@@ -337,7 +337,7 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db = NULL, cont
         annot <- data.frame(ENTREZID = row.names(gene.data))
     }
     genlst <- lapply(seq_len(length(methranges)), function(x) names(genes[subjectHits(findOverlaps(methranges[x,], genes)),]))
-    gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot$ENTREZID %in% x, ]
+    gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot$ENTREZID %in% x, , drop = FALSE]
                                               gd <- gd[,!samps$Category %in% dontuse]
                                               nam <- annot$ENTREZID[annot$ENTREZID %in% x]
                                               gd <- gd[!duplicated(nam),]
