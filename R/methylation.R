@@ -195,7 +195,7 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
         gbm <- geneByMeth(tab = tab[,1:3], genes = genes, eset = eset, samps = samps,
                           gene.data = gene.data, chip.db = chip.db, contname = contname, dontuse = dontuse, orgpkg = orgpkg,
                           stratifyBySex = stratifyBySex, extra.indeps = extra.indeps)
-        uris2 <- gsub("reports//", "", sapply(gbm, function(x) if(is.null(x[[2]])) return NA else path(x[[2]])))
+        uris2 <- gsub("reports//", "", sapply(gbm, function(x) if(is.null(x[[2]])) return(NA) else return(path(x[[2]]))))
         uris2 <- paste0("<a href=\"", uris2,"\">",gsub("\\.html","", uris2), "</a>")
         if(linearfit){
             out <- data.frame(Regions = uris2, p.value = tab$p.value,  Gene.regions = uri.meth)
