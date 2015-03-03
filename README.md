@@ -15,3 +15,5 @@ In addition, this package uses the Bioconductor ReportingTools package to create
 present the results for a given analysis in an HTML table, with clickable links to the above plots. 
 This tends to be a nice format to give to collaborators, so they can easily peruse the results, and 
 also look at graphical representations of significant genomic regions.
+
+If you also have gene expression data, you can look for genes in CIS (within say 1 Mb of a region that shows differential methylation) that have changes in expression that correlate with changes in methylation. This package allows you to generate HTML tables for each methylation region, showing the genes in CIS, statistics that measure correlation between methylation and expression, as well as plots showing the relationship.
