@@ -44,9 +44,7 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
                                showId = TRUE, name = "Transcripts")
     tmp <- grTrack@range
     if(use.symbols && length(tmp) > 0){
-        mapper <- select(orgpkg, elementMetadata(tmp)$symbol, "SYMBOL","TXNAME")
-        mp <- mapper[,2]
-        names(mp) <- mapper[,1]
+        mapper <- mapIds(orgpkg, elementMetadata(tmp)$symbol, "SYMBOL","TXNAME", multiVals = "first")
         elementMetadata(tmp)$symbol <- mp[elementMetadata(tmp)$symbol]
         grTrack@range <- tmp
     }
@@ -239,8 +237,8 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg, stratif
     samps.x <- samps
     lstitm <- as.matrix(t(lstitm))
     if(is.character(orgpkg)) orgpkg <- get(orgpkg)
-    cn <- select(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID")
-    colnames(lstitm) <- gsub("-", "_", cn[,2])
+    cn <- mapIds(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID", multiVals = "first")
+    colnames(lstitm) <- gsub("-", "_", cn)
     naind <- apply(lstitm, 1, is.na)
     if(is.vector(naind)) dim(naind) <- c(1, length(naind))
     samps.x <- samps.y <- cbind(samps.x, tmp, lstitm)
@@ -333,6 +331,8 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db = NULL, cont
     if(!is.null(chip.db)){
         if(is.character(chip.db)) chip.db <- get(chip.db)
         annot <- select(chip.db, row.names(gene.data), "ENTREZID")
+        ## remove dups
+        annot <- annot[!duplicated(annot[,1]),]
     }else{
         annot <- data.frame(ENTREZID = row.names(gene.data))
     }
