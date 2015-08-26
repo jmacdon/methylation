@@ -44,7 +44,10 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
                                showId = TRUE, name = "Transcripts")
     tmp <- grTrack@range
     if(use.symbols && length(tmp) > 0){
-        mapper <- mapIds(orgpkg, elementMetadata(tmp)$symbol, "SYMBOL","TXNAME", multiVals = "first")
+        mapper <- select(orgpkg, elementMetadata(tmp)$symbol, "SYMBOL","TXNAME")
+        mapper <- mapper[!duplicated(mapper[,1]),]
+        mp <- mapper[,2]
+        names(mp) <- mapper[,1]
         elementMetadata(tmp)$symbol <- mp[elementMetadata(tmp)$symbol]
         grTrack@range <- tmp
     }
