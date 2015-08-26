@@ -240,8 +240,9 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg, stratif
     samps.x <- samps
     lstitm <- as.matrix(t(lstitm))
     if(is.character(orgpkg)) orgpkg <- get(orgpkg)
-    cn <- mapIds(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID", multiVals = "first")
-    colnames(lstitm) <- gsub("-", "_", cn)
+    cn <- select(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID")
+    cn <- cn[!duplicated(cn[,1]),]
+    colnames(lstitm) <- gsub("-", "_", cn[,2])
     naind <- apply(lstitm, 1, is.na)
     if(is.vector(naind)) dim(naind) <- c(1, length(naind))
     samps.x <- samps.y <- cbind(samps.x, tmp, lstitm)
