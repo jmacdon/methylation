@@ -44,11 +44,9 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
                                showId = TRUE, name = "Transcripts")
     tmp <- ranges(grTrack)
     if(use.symbols && length(tmp) > 0){
-        mapper <- select(orgpkg, mcols(tmp)$symbol, "SYMBOL","TXNAME")
-        mapper <- mapper[!duplicated(mapper[,1]),]
-        mp <- mapper[,2]
-        names(mp) <- mapper[,1]
-        mcols(tmp)$symbol <- mp[mcols(tmp)$symbol]
+        mapped <- mapIds(orgpkg, mcols(tmp)$symbol, "SYMBOL","TXNAME", multiVals = "first")
+        stopifnot(isTRUE(all.equal(names(mapped), mcols(tmp)$symbol)))
+        mcols(tmp)$symbol <- mapped
         ranges(grTrack) <- tmp
     }
     dtm <- dtf <- rowRanges(eset)[rowRanges(eset) %over% reg,]
@@ -240,9 +238,8 @@ plotAndOut <- function(lstitm, eset, prb, samps, file, contname, orgpkg, stratif
     samps.x <- samps
     lstitm <- as.matrix(t(lstitm))
     if(is.character(orgpkg)) orgpkg <- get(orgpkg)
-    cn <- select(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID")
-    cn <- cn[!duplicated(cn[,1]),]
-    colnames(lstitm) <- gsub("-", "_", cn[,2])
+    cn <- mapIds(orgpkg, colnames(lstitm), "SYMBOL", "ENTREZID", multiVals = "first")
+    colnames(lstitm) <- gsub("-", "_", cn)
     naind <- apply(lstitm, 1, is.na)
     if(is.vector(naind)) dim(naind) <- c(1, length(naind))
     samps.x <- samps.y <- cbind(samps.x, tmp, lstitm)
@@ -334,16 +331,14 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db = NULL, cont
     methranges <- resize(methranges, 1e6, "center")
     if(!is.null(chip.db)){
         if(is.character(chip.db)) chip.db <- get(chip.db)
-        annot <- select(chip.db, row.names(gene.data), "ENTREZID")
-        ## remove dups
-        annot <- annot[!duplicated(annot[,1]),]
-    }else{
+        annot <- mapIds(chip.db, row.names(gene.data), "ENTREZID", "PROBEID", multiVals = "first")
+           }else{
         annot <- data.frame(ENTREZID = row.names(gene.data))
     }
     genlst <- lapply(seq_len(length(methranges)), function(x) names(genes[subjectHits(findOverlaps(methranges[x,], genes)),]))
-    gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot$ENTREZID %in% x, , drop = FALSE]
+    gendatlst <- lapply(genlst, function(x) { gd <- gene.data[annot %in% x, , drop = FALSE]
                                               gd <- gd[,!samps$Category %in% dontuse, drop = FALSE]
-                                              nam <- annot$ENTREZID[annot$ENTREZID %in% x]
+                                              nam <- annot[annot %in% x]
                                               gd <- gd[!duplicated(nam), , drop = FALSE]
                                               nam <- nam[!duplicated(nam)]
                                               row.names(gd) <- nam
