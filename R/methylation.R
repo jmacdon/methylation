@@ -166,6 +166,11 @@ methByRegion <- function(bmpsObj, eset, samps, contname, longname, txdb, gene.da
         stop(paste("If doing a linear fit, you must supply both an MArrayLM object and the column of the MArrayLM object",
                    "that corresponds to the slope beta!\n"), call. = FALSE)
     cutcol <- match.arg(cutcol,  c("p.value", "fwer","p.valueArea", "fwerArea"))
+    if(sum(bmpsObj$table[,cutcol] < cut) == 0) {
+        min <- min(bmpsObj$table[,cutcol])
+        stop(paste0("There are no bumps with a p-value smaller than", cut, "! The minimum value is ", min, ".\n\n"),
+             call. = FALSE)
+    }
     cutcol <- bmpsObj$table[, cutcol]
     tab <- bmpsObj$table[cutcol <= cut,]
     bmpavg <- getMeans(tab[,1:3], eset)
