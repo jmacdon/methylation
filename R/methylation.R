@@ -42,20 +42,20 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
     gTrack <- GenomeAxisTrack()
     grTrack <- GeneRegionTrack(txdb, genome = genome, chromosome = chr, start = start(reg), end = end(reg),
                                showId = TRUE, name = "Transcripts")
-    tmp <- grTrack@range
+    tmp <- ranges(grTrack)
     if(use.symbols && length(tmp) > 0){
-        mapper <- select(orgpkg, elementMetadata(tmp)$symbol, "SYMBOL","TXNAME")
+        mapper <- select(orgpkg, mcols(tmp)$symbol, "SYMBOL","TXNAME")
         mapper <- mapper[!duplicated(mapper[,1]),]
         mp <- mapper[,2]
         names(mp) <- mapper[,1]
-        elementMetadata(tmp)$symbol <- mp[elementMetadata(tmp)$symbol]
-        grTrack@range <- tmp
+        mcols(tmp)$symbol <- mp[mcols(tmp)$symbol]
+        ranges(grTrack) <- tmp
     }
-    dtm <- dtf <- rowData(eset)[rowData(eset) %over% reg,]
+    dtm <- dtf <- rowRanges(eset)[rowRanges(eset) %over% reg,]
     if(!linearfit){
         if(sexfirst == "Male" && stratifyBySex){
-            elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
-            elementMetadata(dtf) <- getM(eset)[rowData(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
+            mcols(dtm) <- getM(eset)[rowRanges(eset) %over% reg, samps$Gender == "Male" & !samps$Category %in% dontuse, drop = FALSE]
+            mcols(dtf) <- getM(eset)[rowRanges(eset) %over% reg, samps$Gender == "Female" & !samps$Category %in% dontuse, drop = FALSE]
             dTrackM <- DataTrack(dtm, name = "Male methylation", 
                                  groups = as.character(samps$Category[samps$Gender == "Male" & !samps$Category %in% dontuse]),
                                  type = c("a","p"))
@@ -72,13 +72,13 @@ makeMethPlot <- function(bumpsObj, eset, row, txdb, orgpkg, samps, dontuse = "",
                                  type = c("a","p"))
             plotTracks(list(iTrack, gTrack, grTrack, dTrackF, dTrackM), from = start(reg), to = end(reg), background.title = "darkblue")
         } else {
-            elementMetadata(dtm) <- getM(eset)[rowData(eset) %over% reg, !samps$Category %in% dontuse, drop = FALSE]
+            mcols(dtm) <- getM(eset)[rowRanges(eset) %over% reg, !samps$Category %in% dontuse, drop = FALSE]
             dTrack <- DataTrack(dtm, name = "Methylation", groups = as.character(samps$Category[!samps$Category %in% dontuse]),
                                 type = c("a","p"), legend = TRUE)
             plotTracks(list(iTrack, gTrack, grTrack, dTrack), from = start(reg), to = end(reg), background.title = "darkblue")
         }
     }else{
-        elementMetadata(dtm) <- fitobj$coef[names(dtm),coefcol]
+        mcols(dtm) <- fitobj$coef[names(dtm),coefcol]
         dTrack <- DataTrack(dtm, name = "Change in methylation", type = c("a", "p"))
         plotTracks(list(iTrack, gTrack, grTrack, dTrack), from = start(reg), to = end(reg), background.title = "darkblue")
     }
@@ -330,7 +330,7 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db = NULL, cont
     methranges <- GRanges(tab[,1], IRanges(tab[,2], tab[,3]))
     probes <- apply(tab, 1, paste, collapse = "_")
     probes <- gsub("\\s+", "", probes, perl = TRUE)
-    probelst <- lapply(1:length(methranges), function(x) names(rowData(eset))[rowData(eset) %over% methranges[x,]])
+    probelst <- lapply(1:length(methranges), function(x) names(rowRanges(eset))[rowRanges(eset) %over% methranges[x,]])
     methranges <- resize(methranges, 1e6, "center")
     if(!is.null(chip.db)){
         if(is.character(chip.db)) chip.db <- get(chip.db)
@@ -365,7 +365,7 @@ geneByMeth <- function(tab,  genes, eset, samps, gene.data, chip.db = NULL, cont
 ##' @author James W. MacDonald (\email{jmacdon@@u.washington.edu})
 getMeans <- function(bmptab, eset){
     gr <- GRanges(bmptab$chr, IRanges(start = bmptab$start, end = bmptab$end))
-    dat <- sapply(1:nrow(bmptab), function(x) colMeans(getM(eset[rowData(eset) %over% gr[x,],])))
+    dat <- sapply(1:nrow(bmptab), function(x) colMeans(getM(eset[rowRanges(eset) %over% gr[x,],])))
     colnames(dat) <- apply(bmptab, 1, function(x) paste(gsub("\\s+", "", x, perl=TRUE), collapse = "_"))
     dat
 }
